@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed (the output of existing operations moves: take it between cuts)
+- **The contact sheet calls a transition what it is.** Every card a transition led into read "dissolve 12f in", and a page's footer "and the dissolve", whatever the transition was: a Wipe the proxy drew as a wipe was a dissolve on the sheet beside it. The card now reads "wipe 12f in", "slide", "fade" (Fade To Color) or "dissolve" for the ones the proxy draws as themselves, and "transition" for any other. A cut whose transitions are all cross dissolves gets the same sheet as before.
+
 ### Docs
 - README: a "More from the same author" section after Credits linking Cut Review, the prompt generator, clickfix-protection-macos, jackpoint and the profile. PyPI shows it from the next release.
 - README: "When To Use This" links the prompt generator and its on-device face blur for AI b-roll and stills, next to the Cut Review line.

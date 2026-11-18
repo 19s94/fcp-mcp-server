@@ -248,12 +248,31 @@ class Cell:
     over: int = 0             # a connected cell: the spine cell it plays over
     flash: tuple = ()         # the flash this cell's picture IS: ("flash 1f 00:00:20:03", "src 00:00:17:23")
     notes: tuple = ()         # grey lines: "ends 1f before #6", "dup 66f with #5"
+    transition_word: str = "dissolve"  # what the transition INTO this cell is: transition_word()
 
 
 def record_order(graph) -> list:
     """Video clips in record order: by first frame, the spine before a lane
     at the same frame, higher lanes after lower."""
     return sorted(video_segments(graph), key=lambda s: (frame_of(s.tl_in), s.lane != 0, s.lane))
+
+
+def transition_word(transition) -> str:
+    """The one word a card uses for a compiled transition: "dissolve",
+    "fade", "wipe" or "slide" for the ones the proxy draws as themselves,
+    "transition" for anything else. An unrecognised transition compiles to a
+    plain dissolve (and the render says so), but the cut does not hold a
+    dissolve, so the card does not call it one."""
+    kind, name = transition.kind, (transition.name or "").lower()
+    if kind == "fade":
+        return "dissolve" if "dissolve" in name or name in ("", "transition") else "transition"
+    if kind == "fadeblack":
+        return "fade"
+    if kind.startswith("wipe"):
+        return "wipe"
+    if kind.startswith("slide"):
+        return "slide"
+    return "transition"
 
 
 def sheet_cells(graph) -> list:
@@ -263,7 +282,8 @@ def sheet_cells(graph) -> list:
     into = {}
     for t in graph.transitions:
         if t.boundary + 1 < len(spine):
-            into[id(spine[t.boundary + 1])] = (length_label(t.end - t.start), id(spine[t.boundary]))
+            into[id(spine[t.boundary + 1])] = (length_label(t.end - t.start), id(spine[t.boundary]),
+                                               transition_word(t))
     # numbered over EVERY clip (audio ones too) in record order, so a cell's
     # number is the text timeline's event number; only pictures get a cell
     every = sorted([s for s in graph.segments if s.kind == "clip"],
@@ -301,7 +321,7 @@ def sheet_cells(graph) -> list:
     cells = []
     for s in order:
         n = index[id(s)]
-        label, outgoing = into.get(id(s), ("", None))
+        label, outgoing, word = into.get(id(s), ("", None, "dissolve"))
         host = 0
         if s.lane:
             under = next((h for h in spine if h.kind == "clip" and frame_of(h.tl_in) <= frame_of(s.tl_in) < frame_of(h.tl_out)), None)
@@ -309,7 +329,7 @@ def sheet_cells(graph) -> list:
         cells.append(Cell(n, s.label, s.lane, frame_of(s.tl_in), frame_of(s.tl_out) - frame_of(s.tl_in),
                           s.source, s.src_in, s.src_out, s.file_time(s.duration / 2), s.missing,
                           label, index.get(outgoing, 0), host, flashed.get(id(s), ()),
-                          tuple(notes.get(id(s), ()))))
+                          tuple(notes.get(id(s), ())), transition_word=word))
     return cells
 
 
@@ -356,7 +376,8 @@ def _cell_text(cell: Cell, f: rs.Face, width: int, nominal: int) -> list:
     then "rec <in>" (cyan: record time) and "src <in>" (an in-point and a
     length make the range: no out-point is printed, so no "to" can be read
     two ways), then, in grey, what only some cells have: "over #4" for a
-    connected clip, "dissolve 12f in" for the clip a transition leads into,
+    connected clip, "dissolve 12f in" (or "wipe", "fade", "slide",
+    "transition": transition_word) for the clip a transition leads into,
     "ends 1f before #6", "dup 66f with #5"; and in red the flash this
     cell's picture is ("flash 1f 00:00:20:03", "· src 00:00:17:23")."""
     length = length_label(cell.frames)
@@ -369,7 +390,7 @@ def _cell_text(cell: Cell, f: rs.Face, width: int, nominal: int) -> list:
     if cell.over:
         lines.append((f"over #{cell.over}", MUTE, ""))
     if cell.transition_in:
-        lines.append((f"dissolve {cell.transition_in} in", MUTE, ""))
+        lines.append((f"{cell.transition_word} {cell.transition_in} in", MUTE, ""))
     for note in cell.notes:
         lines += [(t, MUTE, "") for t in rs.fit(note, f, width)]
     if cell.flash:
@@ -437,8 +458,9 @@ def contact_sheet(timeline, graph, out_dir: Path, *, layout: str = "desktop", fi
         if rest:
             first_rest, last_rest = rest[0][0], rest[-1][-1]
             span = f"#{first_rest.index}" + (f"-#{last_rest.index}" if last_rest is not first_rest else "")
-            joined = any(c.transition_in for pg in rest for c in pg)
-            foot = f"page {p + 2}: {span}{' and the dissolve' if joined else ''}"
+            joined = {c.transition_word for pg in rest for c in pg if c.transition_in}
+            word = next(iter(joined)) if len(joined) == 1 else "transition"
+            foot = f"page {p + 2}: {span}{f' and the {word}' if joined else ''}"
         foot_lines = rs.fit(foot, label, lay.width - 2 * lay.margin) if foot else []  # wrapped, never cut
         height = (lay.margin + head_h + rows * row_h - lay.gutter + lay.margin
                   + (len(foot_lines) * label.height + lay.margin if foot else 0))

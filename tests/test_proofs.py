@@ -1764,3 +1764,44 @@ def test_lengths_round_half_up_exactly():
     """A float's half-to-even printed 5.25 s as 5.2 on the sheet."""
     assert [proofs._seconds_label(Fraction(x)) for x in ("21/4", "19/4", "0", "125/2", "120")] == \
         ["5.3s", "4.8s", "0.0s", "1m02.5s", "2m00.0s"]
+
+
+# ---- the card names the transition it shows (no media needed) -----------------------
+
+def _hand_cut(folder, name, kind=""):
+    from fcpxml.models import Clip, Timecode, Timeline, Transition
+
+    def tc(frames):
+        return Timecode(frames=frames, frame_rate=24.0)
+    media = folder / "a.mov"
+    media.write_bytes(b"\x00")  # the compiler only asks that the file is there
+    clips = [Clip(name=n, start=tc(i * 48), duration=tc(48), source_start=tc(24), media_path=str(media))
+             for i, n in enumerate("ab")]
+    tl = Timeline(name="t", duration=tc(96), frame_rate=24.0, clips=clips,
+                  transitions=[Transition(name=name, duration=tc(12), start=tc(48), transition_type=kind)])
+    return filtergraph.compile_timeline(tl)
+
+
+@pytest.mark.parametrize("name, word", [
+    ("Cross Dissolve", "dissolve"),
+    ("Wipe", "wipe"),
+    ("Slide", "slide"),
+    ("Fade To Color", "fade"),
+    ("Color Panels", "transition"),  # drawn as a dissolve by the proxy, but it is not one
+])
+def test_the_card_calls_a_transition_what_it_is(tmp_path, name, word):
+    """Until this, every card read "dissolve 12f in": a wipe the proxy drew as
+    a wipe was a dissolve on the sheet beside it."""
+    graph = _hand_cut(tmp_path, name)
+    assert len(graph.transitions) == 1
+    into = proofs.sheet_cells(graph)[1]
+    assert (into.transition_in, into.transition_word) == ("12f", word)
+    face = rs.face()
+    assert (f"{word} 12f in", proofs.MUTE, "") in proofs._cell_text(into, face, 400, 24)
+
+
+def test_a_cell_no_transition_leads_into_says_nothing_about_one(tmp_path):
+    first = proofs.sheet_cells(_hand_cut(tmp_path, "Wipe"))[0]
+    assert first.transition_in == ""
+    assert not any(" in" in text and "f" in text for text, _, _ in proofs._cell_text(first, rs.face(), 400, 24)
+                   if text.split()[0] in ("dissolve", "wipe", "slide", "fade", "transition"))
