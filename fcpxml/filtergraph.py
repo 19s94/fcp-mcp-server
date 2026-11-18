@@ -314,15 +314,39 @@ _XFADE_KINDS = {
 }
 
 
+# The same transitions by their effect uid. Final Cut writes a transition's
+# name in the language it runs in ("Cross Dissolve" is only the English one),
+# and the uid in none. tests/test_filtergraph.py holds these against the
+# writer's table, which test_effect_registry.py holds against the app.
+_XFADE_UIDS = {
+    "4731E73A-8DAC-4113-9A30-AE85B1761265": "fade",       # Cross Dissolve
+    "F779C565-486D-4633-8035-0374B4DB8F5C": "fadeblack",  # Fade To Color
+    "857E2FBA-98DB-411B-A88C-CE6ABC1F65D8": "wipeleft",   # Wipe
+    "6AAB0D54-FCD8-4EBD-A62D-D352A5ED1648": "slideleft",  # Slide
+}
+
+
+def _uid_kind(transition: Any) -> Optional[str]:
+    """The xfade kind of the transition's effect uid, or None when the
+    document gave no uid or one this table does not hold."""
+    uid = (getattr(transition, "uid", "") or "").strip().upper()
+    return _XFADE_UIDS.get(uid.removeprefix("FXPLUG:"))
+
+
 def _xfade_kind(transition: Any) -> tuple[str, bool]:
     """Return (xfade transition name, was it recognised?).
 
-    The NAME is read first: it is what the document says the transition is.
+    The effect's uid is read first, when the document gave one: it is the
+    same in every language. Then the NAME, which is what the document says
+    the transition is but in the language Final Cut ran in.
     ``transition_type`` only speaks for a hand-built model; the parser leaves
     it empty, because its "cross-dissolve" default used to vouch for every
     transition Final Cut wrote, so "Color Panels" previewed as a dissolve
     without a word.
     """
+    kind = _uid_kind(transition)
+    if kind is not None:
+        return kind, True
     for value in (
         getattr(transition, "name", "") or "",
         getattr(transition, "transition_type", "") or "",
@@ -331,6 +355,16 @@ def _xfade_kind(transition: Any) -> tuple[str, bool]:
         if kind is not None:
             return kind, True
     return "fade", False
+
+
+def is_dissolve(transition: Any) -> bool:
+    """A cross dissolve: by its effect when the document names one this
+    module knows, and only otherwise by its name. A wipe someone renamed
+    "Cross Dissolve" is drawn as a wipe, so it is counted as one too."""
+    kind = _uid_kind(transition)
+    if kind is not None:
+        return kind == "fade"
+    return "dissolve" in (getattr(transition, "name", "") or "").lower()
 
 
 def _place_transitions(

@@ -886,6 +886,10 @@ class Transition:
     lead: Optional[Timecode] = None
     # 0 on the primary storyline; N inside a connected storyline on lane N.
     lane: int = 0
+    # The effect's uid ("FxPlug:<UUID>") as the document's resources give it,
+    # "" when it names none. The uid is what the transition IS; ``name`` is a
+    # label Final Cut writes in the language it runs in.
+    uid: str = ""
 
 
 @dataclass

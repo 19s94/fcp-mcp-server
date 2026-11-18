@@ -290,6 +290,87 @@ def test_a_transition_uses_its_own_lead_not_an_assumed_centre(tmp_path):
     assert (compile_timeline(tl).transitions[0].start, compile_timeline(tl).transitions[0].end) == (24, 36)
 
 
+# --- transitions by effect uid, not by the language of their name ----------
+
+CROSS_DISSOLVE_UID = "FxPlug:4731E73A-8DAC-4113-9A30-AE85B1761265"
+WIPE_UID = "FxPlug:857E2FBA-98DB-411B-A88C-CE6ABC1F65D8"
+
+
+def _two_clips(tmp_path, transition):
+    media = tmp_path / "a.mov"
+    media.write_bytes(b"\x00")
+    return _timeline(
+        [_clip("a", 0, 24, path=str(media)), _clip("b", 24, 24, path=str(media))],
+        transitions=[transition],
+    )
+
+
+@pytest.mark.parametrize("name, uid, kind", [
+    ("Disolución cruzada", CROSS_DISSOLVE_UID, "fade"),
+    ("Überblenden", CROSS_DISSOLVE_UID.lower().replace("fxplug", "FxPlug"), "fade"),
+    ("Barrido", WIPE_UID, "wipeleft"),
+    ("Cross Dissolve", WIPE_UID, "wipeleft"),  # the effect wins over a renamed label
+])
+def test_a_transition_is_known_by_its_effect_in_any_language(tmp_path, name, uid, kind):
+    """A Final Cut that does not run in English names its transitions in its
+    own language. Read by name alone, every one of them was drawn as a
+    dissolve and reported as having "no xfade equivalent"."""
+    transition = _transition(name, 24, kind="")
+    transition.uid = uid
+    graph = compile_timeline(_two_clips(tmp_path, transition))
+    assert graph.transitions[0].kind == kind
+    assert not any("rendered as a dissolve" in n for n in graph.substitutions)
+
+
+def test_an_unknown_effect_still_falls_back_to_its_name(tmp_path):
+    transition = _transition("Wipe", 24, kind="")
+    transition.uid = "FxPlug:00000000-0000-0000-0000-000000000000"
+    assert compile_timeline(_two_clips(tmp_path, transition)).transitions[0].kind == "wipeleft"
+
+
+def test_an_unknown_effect_with_an_unknown_name_is_still_reported(tmp_path):
+    transition = _transition("Paneles de color", 24, kind="")
+    transition.uid = "FxPlug:00000000-0000-0000-0000-000000000000"
+    graph = compile_timeline(_two_clips(tmp_path, transition))
+    assert graph.transitions[0].kind == "fade"
+    assert any("Paneles de color" in n and "rendered as a dissolve" in n for n in graph.substitutions)
+
+
+def test_the_uid_table_is_the_writers_table():
+    """One set of uids: the writer's, which test_effect_registry.py reads
+    against the installed Final Cut. A uid here that the writer does not
+    write under the same meaning is a typo."""
+    from fcpxml.filtergraph import _XFADE_UIDS
+    from fcpxml.writer import FCP_EFFECTS
+    by_slug = {"cross-dissolve": "fade", "dip-to-color": "fadeblack", "edge-wipe": "wipeleft", "slide": "slideleft"}
+    expected = {FCP_EFFECTS[slug][1].removeprefix("FxPlug:"): kind for slug, kind in by_slug.items()}
+    assert _XFADE_UIDS == expected
+
+
+def test_is_dissolve_reads_the_effect_then_the_name():
+    from fcpxml.filtergraph import is_dissolve
+    spanish = _transition("Disolución cruzada", 24, kind="")
+    assert not is_dissolve(spanish)
+    spanish.uid = CROSS_DISSOLVE_UID
+    assert is_dissolve(spanish)
+    assert is_dissolve(_transition("Cross Dissolve", 24, kind=""))
+    wipe = _transition("Barrido", 24, kind="")
+    wipe.uid = WIPE_UID
+    assert not is_dissolve(wipe)
+    # the preview draws a renamed wipe as a wipe, so the count says wipe too
+    renamed = _transition("Cross Dissolve", 24, kind="")
+    renamed.uid = WIPE_UID
+    assert not is_dissolve(renamed)
+    # a hand-built model's "cross-dissolve" default vouches for nothing
+    assert not is_dissolve(_transition("Color Panels", 24))
+
+
+def test_the_uid_prefix_is_read_in_any_case(tmp_path):
+    transition = _transition("Barrido", 24, kind="")
+    transition.uid = WIPE_UID.lower()
+    assert compile_timeline(_two_clips(tmp_path, transition)).transitions[0].kind == "wipeleft"
+
+
 def test_two_transitions_cannot_share_one_cut(tmp_path):
     media = tmp_path / "a.mov"
     media.write_bytes(b"\x00")

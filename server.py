@@ -37,6 +37,7 @@ from fcpxml import journal as _journal
 from fcpxml import live
 from fcpxml import timeline_app as _timeline_app
 from fcpxml.diff import compare_timelines, format_diff
+from fcpxml.filtergraph import is_dissolve
 from fcpxml.mcp_compat import (
     APPS_EXTENSION_ID,
     ToolReply,
@@ -2430,7 +2431,7 @@ def _edit_points(tl) -> str:
     points = tl.total_cuts
     kinds: dict = {}
     for t in tl.transitions:
-        word = "dissolve" if "dissolve" in (t.name or "").lower() else "transition"
+        word = "dissolve" if is_dissolve(t) else "transition"
         kinds[word] = kinds.get(word, 0) + 1
     joined = sum(kinds.values())
     parts = [f"{points - joined} cut{'' if points - joined == 1 else 's'}"]

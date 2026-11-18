@@ -81,6 +81,7 @@ class FCPXMLParser:
 
     def __init__(self):
         self.resources: Dict[str, Dict[str, Any]] = {}
+        self.effect_uids: Dict[str, str] = {}
         self.formats: Dict[str, Dict[str, Any]] = {}
         self.media: Dict[str, Dict[str, Any]] = {}
         self.frame_rate: float = 24.0
@@ -198,6 +199,10 @@ class FCPXMLParser:
             # conversion downstream was wrong by that factor.
             if index == 0 and rate is not None:
                 self.frame_rate = rate
+
+        for effect in resources.findall('effect'):
+            if effect.get('id') and effect.get('uid'):
+                self.effect_uids[effect.get('id')] = effect.get('uid')
 
         for asset in resources.findall('asset'):
             asset_id = asset.get('id', '')
@@ -573,12 +578,17 @@ class FCPXMLParser:
             if before is not None and 0 <= before <= length:
                 lead = Timecode(frames=round(Fraction(before) * rational_fps(self.frame_rate)),
                                 frame_rate=self.frame_rate)
+        # The picture's effect says which transition this is, in every
+        # language; a transition with only a <filter-audio> is a sound fade.
+        video = elem.find('filter-video')
+        uid = self.effect_uids.get(video.get('ref', ''), '') if video is not None else ''
         return Transition(
             name=elem.get('name', 'Cross Dissolve'),
             duration=duration,
             start=Timecode(frames=offset, frame_rate=self.frame_rate),
             transition_type='',
             lead=lead,
+            uid=uid,
         )
 
     def get_library_clips(self, keywords: Optional[list] = None) -> list:

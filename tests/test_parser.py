@@ -266,6 +266,45 @@ def test_transition_parsed():
     assert len(tl.clips) == 2
 
 
+def test_transition_carries_its_effect_uid_whatever_its_name_says():
+    """Final Cut writes the name in the language it runs in; the uid of the
+    effect the transition's <filter-video> points at is the same in all."""
+    effect = '<effect id="r9" name="Disolución cruzada" uid="FxPlug:4731E73A-8DAC-4113-9A30-AE85B1761265"/>'
+    spine = (CLIP_A
+             + '<transition name="Disolución cruzada" offset="96/24s" duration="24/24s">'
+               '<filter-video ref="r9" name="Disolución cruzada"/></transition>'
+             + '<asset-clip ref="r2" offset="120/24s" name="B" start="10s" duration="120/24s" format="r1"/>'
+             + '<transition name="Sound only" offset="216/24s" duration="24/24s">'
+               '<filter-audio ref="r9" name="Audio Crossfade"/></transition>'
+             + '<asset-clip ref="r2" offset="240/24s" name="C" start="20s" duration="120/24s" format="r1"/>')
+    first, sound_only = FCPXMLParser().parse_string(_fcpxml(spine, ASSET_R2 + effect)).primary_timeline.transitions
+    assert first.name == "Disolución cruzada"
+    assert first.uid == "FxPlug:4731E73A-8DAC-4113-9A30-AE85B1761265"
+    assert sound_only.uid == ""
+
+
+def test_inspect_counts_a_dissolve_named_in_another_language():
+    """The Edit points line read "1 transition" for a cross dissolve whose
+    name was not English."""
+    import server
+
+    effect = '<effect id="r9" name="Disolución cruzada" uid="FxPlug:4731E73A-8DAC-4113-9A30-AE85B1761265"/>'
+    spine = (CLIP_A
+             + '<transition name="Disolución cruzada" offset="96/24s" duration="24/24s">'
+               '<filter-video ref="r9" name="Disolución cruzada"/></transition>'
+             + '<asset-clip ref="r2" offset="120/24s" name="B" start="10s" duration="120/24s" format="r1"/>')
+    tl = FCPXMLParser().parse_string(_fcpxml(spine, ASSET_R2 + effect)).primary_timeline
+    assert "1 dissolve" in server._edit_points(tl)
+    assert "transition" not in server._edit_points(tl)
+
+
+def test_transition_without_an_effect_has_no_uid():
+    spine = (CLIP_A
+             + '<transition name="Cross Dissolve" offset="120/24s" duration="24/24s"/>'
+             + '<asset-clip ref="r2" offset="120/24s" name="B" start="10s" duration="120/24s" format="r1"/>')
+    assert FCPXMLParser().parse_string(_fcpxml(spine, ASSET_R2)).primary_timeline.transitions[0].uid == ""
+
+
 def test_gap_advances_offset():
     spine = (CLIP_A
              + '<gap offset="120/24s" duration="48/24s"/>'

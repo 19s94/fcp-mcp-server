@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed (the output of existing operations moves: take it between cuts)
+- **A transition is recognised by its effect, not by the language of its name.** `preview_render` and the Edit points line of `analyze_timeline` read a transition's `name`, which Final Cut writes in the language it runs in. The parser now keeps the uid of the effect the transition's `<filter-video>` points at, and Cross Dissolve, Fade To Color, Wipe and Slide are known by it first; the name is still read when the document gives no uid or one that is not in the table. English documents are unchanged except one case: a transition whose effect is one of those four but whose name says another is now drawn and counted as its effect. Not checked against a file exported by a non-English Final Cut.
+
 ### Docs
 - README: a "More from the same author" section after Credits linking Cut Review, the prompt generator, clickfix-protection-macos, jackpoint and the profile. PyPI shows it from the next release.
 - README: "When To Use This" links the prompt generator and its on-device face blur for AI b-roll and stills, next to the Cut Review line.
