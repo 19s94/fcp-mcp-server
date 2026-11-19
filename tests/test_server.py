@@ -16,7 +16,15 @@ import pytest
 # ---------------------------------------------------------------------------
 # Shim the `mcp` package tree before importing server.py
 # ---------------------------------------------------------------------------
-_NEEDS_SHIM = "mcp" not in sys.modules or "mcp.server" not in sys.modules
+# The shim is for a Python that does not have the SDK at all. Whether the SDK
+# has been IMPORTED yet says nothing about that: asked that way (until 0.35),
+# running this file alone, or first, put the fakes in sys.modules for the
+# whole run in front of an installed SDK.
+try:
+    import mcp.server  # noqa: F401
+    _NEEDS_SHIM = False
+except ImportError:
+    _NEEDS_SHIM = True
 
 
 def _install_mcp_shim():

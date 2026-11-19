@@ -38,7 +38,17 @@ from fcpxml.writer import (
 # ---------------------------------------------------------------------------
 # Shim the `mcp` package so server.py can be imported without the real SDK
 # ---------------------------------------------------------------------------
-if "mcp" not in sys.modules or "mcp.server" not in sys.modules:
+# The shim is for a Python that does not have the SDK at all. Whether the SDK
+# has been IMPORTED yet says nothing about that: asked that way (until 0.35),
+# running this file alone, or first, put the fakes in sys.modules for the
+# whole run in front of an installed SDK.
+try:
+    import mcp.server  # noqa: F401
+    _NEEDS_SHIM = False
+except ImportError:
+    _NEEDS_SHIM = True
+
+if _NEEDS_SHIM:
     mcp = types.ModuleType("mcp")
     mcp_server = types.ModuleType("mcp.server")
     mcp_server_lowlevel = types.ModuleType("mcp.server.lowlevel")

@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Tests
+- **A test file runs on its own, and in any order.** `test_server.py`, `test_refactored_helpers.py` and `test_security.py` install a fake `mcp` so `server.py` imports without the SDK, and decided to by asking whether `mcp` had been imported yet rather than whether it is installed. With the SDK installed, the first two failed at collection when run alone (`No module named 'mcp.server.lowlevel'`), and `test_security.py` run first handed its fake to every later file (three failures in `test_mcp_compat.py`). The full suite hid it because an earlier file imports the real SDK. They now try the import. `tests/test_runs_alone.py` holds it. No change to the server.
+
 ### Docs
 - README: a "More from the same author" section after Credits linking Cut Review, the prompt generator, clickfix-protection-macos, jackpoint and the profile. PyPI shows it from the next release.
 - README: "When To Use This" links the prompt generator and its on-device face blur for AI b-roll and stills, next to the Cut Review line.
